@@ -33,6 +33,8 @@ export interface Submission {
   pct: number;
   date: string;
   status: 'pending' | 'approved' | 'flagged';
+  hasVideo?: boolean;
+  profile_photo?: string;
 }
 
 export const SUBMISSIONS_INIT: Submission[] = [];

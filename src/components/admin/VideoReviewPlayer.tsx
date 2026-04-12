@@ -110,7 +110,16 @@ export function VideoReviewPlayer({ submission, onApprove, onFlag, onClose }: Vi
         <div className="grid grid-cols-2 gap-4 text-sm mb-6 relative z-10 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
           <div className="space-y-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Athlete</span> 
-            <span className="font-extrabold text-slate-900">{submission.name}</span>
+            <div className="flex items-center gap-2">
+              {(submission as any).profile_photo ? (
+                <img src={(submission as any).profile_photo} alt={submission.name} className="w-6 h-6 rounded-full object-cover border border-slate-200" />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-[10px] uppercase">
+                  {submission.name.slice(0, 2)}
+                </div>
+              )}
+              <span className="font-extrabold text-slate-900">{submission.name}</span>
+            </div>
           </div>
           <div className="space-y-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Assessment</span> 

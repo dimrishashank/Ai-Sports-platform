@@ -34,7 +34,18 @@ export function SubmissionTable({ submissions, onView, onApprove, onFlag }: Subm
 
               return (
                 <tr key={s.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-6 py-4 text-sm font-extrabold text-slate-900 leading-tight">{s.name}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      {s.profile_photo ? (
+                        <img src={s.profile_photo} alt={s.name} className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase shadow-sm shrink-0">
+                          {s.name.slice(0, 2)}
+                        </div>
+                      )}
+                      <span className="text-sm font-extrabold text-slate-900 leading-tight">{s.name}</span>
+                    </div>
+                  </td>
                   <td className="px-6 py-4 text-sm font-medium text-slate-700">{s.test}</td>
                   <td className="px-6 py-4 text-sm font-extrabold text-indigo-600">{aiReps}</td>
                   <td className="px-6 py-4">

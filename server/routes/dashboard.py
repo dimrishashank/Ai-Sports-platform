@@ -122,6 +122,7 @@ def admin_dashboard():
                 "id": str(s["_id"]),
                 "name": u["name"],
                 "loc": u.get("location", ""),
+                "profile_photo": u.get("profile_photo", ""),
                 "test": s["test_type"],
                 "score": s["score"],
                 "pct": s.get("percentile", 0),

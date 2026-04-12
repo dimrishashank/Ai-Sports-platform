@@ -62,6 +62,7 @@ def list_submissions():
         result.append({
             "id": str(s["_id"]),
             "name": user["name"],
+            "profile_photo": user.get("profile_photo", ""),
             "age": user.get("age"),
             "gender": user.get("gender"),
             "loc": user.get("location", ""),

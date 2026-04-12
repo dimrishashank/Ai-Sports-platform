@@ -19,6 +19,7 @@ interface Submission {
   date: string;
   status: 'pending' | 'approved' | 'flagged';
   hasVideo?: boolean;
+  profile_photo?: string;
 }
 
 export default function AdminSubmissionsPage() {

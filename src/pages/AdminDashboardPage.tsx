@@ -225,8 +225,19 @@ export default function AdminDashboardPage() {
                     className="hover:bg-slate-50 transition-colors group"
                   >
                     <td className="px-6 py-4">
-                      <p className="text-sm font-bold text-slate-900 leading-tight">{s.name}</p>
-                      <p className="text-xs font-semibold text-slate-400 mt-1">{s.loc}</p>
+                      <div className="flex items-center gap-3">
+                        {s.profile_photo ? (
+                          <img src={s.profile_photo} alt={s.name} className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase shadow-sm shrink-0">
+                            {s.name.slice(0, 2)}
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 leading-tight">{s.name}</p>
+                          <p className="text-xs font-semibold text-slate-400 mt-1">{s.loc}</p>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-slate-700">{s.test}</td>
                     <td className="px-6 py-4 text-sm font-extrabold text-slate-900">{s.score} <span className="text-indigo-600 font-bold ml-1">({s.pct}th)</span></td>
