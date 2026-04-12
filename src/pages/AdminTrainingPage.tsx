@@ -6,7 +6,8 @@ import { ExportButton } from '@/components/common/ExportButton';
 import { toast } from '@/components/ui/use-toast';
 import {
   Brain, Upload, CheckCircle, AlertTriangle, Loader2,
-  Dumbbell, Activity, Target, FileVideo, BarChart3, Database, Hash
+  Dumbbell, Activity, Target, FileVideo, BarChart3, Hash,
+  Trash2, Pencil, X, Play, Save, Eye
 } from 'lucide-react';
 
 const TEST_ICONS: Record<string, React.ElementType> = {
@@ -30,6 +31,20 @@ interface TrainingStatus {
   last_trained: string | null;
 }
 
+interface TrainingSample {
+  id: string;
+  test_type: string;
+  label: string;
+  video_name: string;
+  ai_rep_count: number;
+  expected_reps: number | null;
+  verified_rep_count: number;
+  gdrive_file_id: string;
+  frames_analyzed: number;
+  visibility: number;
+  created_at: string;
+}
+
 export default function AdminTrainingPage() {
   const { user } = useAuth();
   const isHeadAdmin = user?.role === 'headadmin';
@@ -45,9 +60,26 @@ export default function AdminTrainingPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  // Samples state
+  const [samples, setSamples] = useState<TrainingSample[]>([]);
+  const [samplesLoading, setSamplesLoading] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editReps, setEditReps] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Video preview modal
+  const [videoModal, setVideoModal] = useState<{ url: string; name: string } | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
+
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (selectedTest) {
+      loadSamples(selectedTest);
+    }
+  }, [selectedTest]);
 
   const loadData = async () => {
     setLoading(true);
@@ -56,7 +88,6 @@ export default function AdminTrainingPage() {
         testsApi.getTypes(),
         trainingApi.getStatus(),
       ]);
-      // Only active tests
       const active = typesRes.types.filter((t: any) => t.status !== 'coming_soon');
       setTestTypes(active);
       setTrainingData(statusRes.training);
@@ -67,6 +98,18 @@ export default function AdminTrainingPage() {
       console.error('Failed to load training data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSamples = async (testType: string) => {
+    setSamplesLoading(true);
+    try {
+      const res = await trainingApi.getSamples(testType);
+      setSamples(res.samples);
+    } catch (err) {
+      console.error('Failed to load samples:', err);
+    } finally {
+      setSamplesLoading(false);
     }
   };
 
@@ -87,16 +130,15 @@ export default function AdminTrainingPage() {
         ? `AI: ${res.result.reps_detected} reps, Expected: ${res.result.expected_reps} (diff: ${res.result.rep_difference})`
         : `${res.result.reps_detected} reps detected`;
       toast({
-        title: '✅ Training Video Processed',
+        title: 'Training Video Processed',
         description: `${repInfo}. ${res.result.frames_analyzed} frames analyzed. Visibility: ${res.result.visibility}%`,
       });
       setVideoFile(null);
       setExpectedReps('');
-      // Reset file input
       const fileInput = document.getElementById('training-video-input') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
-      // Refresh status
       loadData();
+      loadSamples(selectedTest);
     } catch (err: any) {
       toast({
         title: 'Upload Failed',
@@ -106,6 +148,53 @@ export default function AdminTrainingPage() {
     } finally {
       setUploading(false);
       setUploadProgress(0);
+    }
+  };
+
+  const handleDeleteSample = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await trainingApi.deleteSample(id);
+      toast({ title: 'Deleted', description: 'Training sample removed.' });
+      loadData();
+      loadSamples(selectedTest);
+    } catch (err: any) {
+      toast({ title: 'Delete Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleUpdateReps = async (id: string) => {
+    const reps = parseInt(editReps);
+    if (isNaN(reps) || reps < 0) {
+      toast({ title: 'Invalid', description: 'Enter a valid number.', variant: 'destructive' });
+      return;
+    }
+    try {
+      await trainingApi.updateSample(id, { expected_reps: reps });
+      toast({ title: 'Updated', description: `Expected reps changed to ${reps}.` });
+      setEditingId(null);
+      loadSamples(selectedTest);
+      loadData();
+    } catch (err: any) {
+      toast({ title: 'Update Failed', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handlePlayVideo = async (sample: TrainingSample) => {
+    if (!sample.gdrive_file_id) {
+      toast({ title: 'No Video', description: 'This sample has no video stored.', variant: 'destructive' });
+      return;
+    }
+    setVideoLoading(true);
+    try {
+      const res = await trainingApi.getSampleVideoUrl(sample.id);
+      setVideoModal({ url: res.url, name: sample.video_name });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setVideoLoading(false);
     }
   };
 
@@ -130,35 +219,15 @@ export default function AdminTrainingPage() {
       ];
 
       const rows = dataset.map(d => [
-        d.id,
-        d.source || 'training_upload',
-        `"${d.test_type}"`,
-        d.label,
-        `"${d.video_name || ''}"`,
-        d.ai_rep_count ?? d.rep_count ?? 0,
-        d.admin_rep_count ?? '',
-        d.verified_rep_count ?? d.ai_rep_count ?? d.rep_count ?? 0,
-        d.analyzed_frames,
-        d.fps,
-        d.primary_angle_min,
-        d.primary_angle_max,
-        d.primary_angle_mean,
-        d.primary_angle_std,
-        d.primary_angle_range,
-        d.body_line_mean,
-        d.body_line_std,
-        d.visibility_mean,
-        d.visibility_min,
-        d.rep_duration_mean,
-        d.rep_duration_std,
-        `"${d.created_at}"`
+        d.id, d.source || 'training_upload', `"${d.test_type}"`, d.label, `"${d.video_name || ''}"`,
+        d.ai_rep_count ?? d.rep_count ?? 0, d.admin_rep_count ?? '', d.verified_rep_count ?? d.ai_rep_count ?? d.rep_count ?? 0,
+        d.analyzed_frames, d.fps,
+        d.primary_angle_min, d.primary_angle_max, d.primary_angle_mean, d.primary_angle_std, d.primary_angle_range,
+        d.body_line_mean, d.body_line_std, d.visibility_mean, d.visibility_min,
+        d.rep_duration_mean, d.rep_duration_std, `"${d.created_at}"`
       ]);
 
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(r => r.join(','))
-      ].join('\n');
-
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -169,7 +238,7 @@ export default function AdminTrainingPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast({ title: '✅ Dataset Exported', description: `${dataset.length} training records exported successfully.` });
+      toast({ title: 'Dataset Exported', description: `${dataset.length} training records exported successfully.` });
     } catch (error) {
       console.error('Dataset export failed:', error);
       toast({ title: 'Export Failed', description: 'Could not export training dataset.', variant: 'destructive' });
@@ -284,7 +353,7 @@ export default function AdminTrainingPage() {
             </div>
             <div>
               <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">Upload Training Video</h2>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 mt-0.5">Selected test: <span className="text-fuchsia-600">{selectedTest || 'None'}</span></p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Selected test: <span className="text-fuchsia-600">{selectedTest || 'None'}</span></p>
             </div>
           </div>
 
@@ -351,7 +420,7 @@ export default function AdminTrainingPage() {
                 <div className="pointer-events-none">
                   {videoFile ? (
                     <p className="text-sm font-bold text-fuchsia-600">
-                      📎 {videoFile.name} <span className="text-slate-400 font-medium ml-1">({(videoFile.size / (1024 * 1024)).toFixed(1)} MB)</span>
+                      {videoFile.name} <span className="text-slate-400 font-medium ml-1">({(videoFile.size / (1024 * 1024)).toFixed(1)} MB)</span>
                     </p>
                   ) : (
                     <>
@@ -420,6 +489,147 @@ export default function AdminTrainingPage() {
           </form>
         </div>
 
+        {/* Training Samples Table */}
+        <div className="bg-white/60 backdrop-blur-md border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl overflow-hidden mb-8">
+          <div className="px-8 py-6 border-b border-white/40 bg-white/40 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
+                <Eye className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">Training Samples</h2>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                  Showing: <span className="text-indigo-600">{selectedTest}</span> — {samples.length} sample{samples.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {samplesLoading ? (
+            <div className="p-8 space-y-4">
+              {[1,2,3].map(i => (
+                <div key={i} className="h-16 bg-slate-100/50 animate-pulse rounded-xl" />
+              ))}
+            </div>
+          ) : samples.length === 0 ? (
+            <div className="py-16 text-center">
+              <FileVideo className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+              <p className="text-sm font-bold text-slate-500">No training samples for {selectedTest} yet.</p>
+              <p className="text-xs text-slate-400 mt-1">Upload a video above to get started.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-200/60 bg-slate-50/50">
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Video</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Label</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">AI Reps</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Expected Reps</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Visibility</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Date</th>
+                    <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100/50">
+                  {samples.map(s => (
+                    <tr key={s.id} className="hover:bg-slate-50 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          {s.gdrive_file_id ? (
+                            <button
+                              onClick={() => handlePlayVideo(s)}
+                              className="w-10 h-10 rounded-xl bg-fuchsia-100 hover:bg-fuchsia-200 flex items-center justify-center transition-colors shrink-0"
+                              title="Play video"
+                            >
+                              <Play className="w-4 h-4 text-fuchsia-600 ml-0.5" />
+                            </button>
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                              <FileVideo className="w-4 h-4 text-slate-400" />
+                            </div>
+                          )}
+                          <span className="text-sm font-bold text-slate-900 truncate max-w-[180px]">{s.video_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg ${
+                          s.label === 'correct' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'
+                        }`}>
+                          {s.label}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-extrabold text-indigo-600">{s.ai_rep_count}</td>
+                      <td className="px-6 py-4">
+                        {editingId === s.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              value={editReps}
+                              onChange={e => setEditReps(e.target.value)}
+                              className="w-20 px-3 py-1.5 text-sm font-bold text-slate-900 bg-white border border-fuchsia-300 rounded-lg focus:ring-2 focus:ring-fuchsia-500/20 outline-none"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => handleUpdateReps(s.id)}
+                              className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors"
+                              title="Save"
+                            >
+                              <Save className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setEditingId(null)}
+                              className="p-1.5 bg-slate-50 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                              title="Cancel"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-extrabold text-slate-900">
+                              {s.expected_reps != null ? s.expected_reps : <span className="text-slate-300 font-medium">—</span>}
+                            </span>
+                            <button
+                              onClick={() => { setEditingId(s.id); setEditReps(String(s.expected_reps ?? '')); }}
+                              className="p-1 text-slate-400 hover:text-fuchsia-600 transition-colors opacity-0 group-hover:opacity-100"
+                              title="Edit expected reps"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-fuchsia-500 rounded-full" style={{ width: `${s.visibility}%` }} />
+                          </div>
+                          <span className="text-xs font-bold text-slate-500">{s.visibility}%</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-medium text-slate-500">
+                        {s.created_at ? new Date(s.created_at).toLocaleDateString([], { dateStyle: 'medium' }) : '—'}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => handleDeleteSample(s.id)}
+                          disabled={deletingId === s.id}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-50"
+                          title="Delete sample"
+                        >
+                          {deletingId === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {/* Info */}
         <div className="p-6 bg-indigo-50/50 border border-indigo-100/50 rounded-2xl">
           <div className="flex items-start gap-4">
@@ -432,13 +642,51 @@ export default function AdminTrainingPage() {
                 <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div> Upload videos labeled as <strong>Correct Form</strong> or <strong>Foul</strong></li>
                 <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div> AI extracts joint angles, rep timing, and body alignment from each video</li>
                 <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div> After ≥1 correct sample, a reference model is built for that exercise</li>
-                <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div> New athlete submissions are scored against these trained patterns</li>
+                <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div> Rep counting: UP → DOWN → UP = 1 rep (athlete must start in UP position)</li>
                 <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div> More samples = better accuracy for automatic approval/flagging</li>
               </ul>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Video Preview Modal */}
+      {videoModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
+          <div className="w-full max-w-3xl bg-white rounded-2xl overflow-hidden shadow-2xl">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-3">
+                <Play className="w-5 h-5 text-fuchsia-600" />
+                <h3 className="text-lg font-bold text-slate-900 truncate">{videoModal.name}</h3>
+              </div>
+              <button
+                onClick={() => setVideoModal(null)}
+                className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="bg-black aspect-video">
+              <video
+                src={videoModal.url}
+                controls
+                autoPlay
+                className="w-full h-full"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Video Loading Overlay */}
+      {videoLoading && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-8 flex items-center gap-4 shadow-xl">
+            <Loader2 className="w-6 h-6 animate-spin text-fuchsia-600" />
+            <span className="text-sm font-bold text-slate-700">Loading video...</span>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

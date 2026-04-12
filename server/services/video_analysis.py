@@ -90,7 +90,7 @@ def analyze_video(video_path: str, test_type: str) -> dict:
     joint_config = _get_joint_config(test_type)
 
     rep_count = 0
-    phase = "up"  # start assuming "up" position
+    phase = None  # Don't assume initial phase — wait for first stable "up"
     angles = []
     form_scores = []
     flags = []
@@ -116,9 +116,13 @@ def analyze_video(video_path: str, test_type: str) -> dict:
             angles.append(angle)
 
             # State machine for rep counting
+            # Rule: athlete starts UP, goes DOWN, comes back UP = 1 rep
             if joint_config["direction"] == "down_up":
-                # Pushups / Sit-ups: angle goes down then up = 1 rep
-                if phase == "up" and angle < joint_config["down_threshold"]:
+                if phase is None:
+                    # Wait until we see a clear "up" position to start
+                    if angle > joint_config["up_threshold"]:
+                        phase = "up"
+                elif phase == "up" and angle < joint_config["down_threshold"]:
                     phase = "down"
                 elif phase == "down" and angle > joint_config["up_threshold"]:
                     phase = "up"

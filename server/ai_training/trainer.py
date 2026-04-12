@@ -213,7 +213,11 @@ def extract_exercise_pattern(video_path: str, test_type: str) -> dict:
 
 
 def _count_reps_detailed(angles, timestamps):
-    """Count reps and extract per-rep angle profiles and durations."""
+    """Count reps and extract per-rep angle profiles and durations.
+    
+    Rep rule: wait for first stable UP position, then
+    UP → DOWN → UP = 1 rep counted on return to UP.
+    """
     kernel_size = 5
     if len(angles) >= kernel_size:
         kernel = np.ones(kernel_size) / kernel_size
@@ -222,15 +226,23 @@ def _count_reps_detailed(angles, timestamps):
         smoothed = angles
 
     median_angle = np.median(smoothed)
-    phase = "up" if smoothed[0] > median_angle else "down"
+    up_thresh = median_angle + 10
+    down_thresh = median_angle - 10
 
-    rep_starts = [0]
+    # Wait for first stable "up" before counting
+    phase = None
+    rep_starts = []
     reps = 0
 
-    for i in range(1, len(smoothed)):
-        if phase == "up" and smoothed[i] < median_angle - 10:
+    for i in range(len(smoothed)):
+        if phase is None:
+            # Wait until we see a clear "up" position
+            if smoothed[i] > up_thresh:
+                phase = "up"
+                rep_starts.append(i)
+        elif phase == "up" and smoothed[i] < down_thresh:
             phase = "down"
-        elif phase == "down" and smoothed[i] > median_angle + 10:
+        elif phase == "down" and smoothed[i] > up_thresh:
             phase = "up"
             reps += 1
             rep_starts.append(i)
@@ -251,7 +263,7 @@ def _count_reps_detailed(angles, timestamps):
 
 # ── Database persistence ──────────────────────────────────────────
 
-def save_pattern_to_db(db, pattern: dict, label: str, video_name: str, expected_reps: int = None):
+def save_pattern_to_db(db, pattern: dict, label: str, video_name: str, expected_reps: int = None, gdrive_file_id: str = ""):
     """
     Save extracted pattern to MongoDB and update reference thresholds.
     
@@ -261,6 +273,7 @@ def save_pattern_to_db(db, pattern: dict, label: str, video_name: str, expected_
         label: "correct" or "foul"
         video_name: name of the source video file
         expected_reps: admin-provided ground truth rep count (optional)
+        gdrive_file_id: Google Drive file ID for video playback
     """
     ai_reps = pattern.get("rep_count", 0)
 
@@ -272,6 +285,7 @@ def save_pattern_to_db(db, pattern: dict, label: str, video_name: str, expected_
         "ai_rep_count": ai_reps,
         "expected_reps": expected_reps,
         "verified_rep_count": expected_reps if expected_reps is not None else ai_reps,
+        "gdrive_file_id": gdrive_file_id,
         "created_at": datetime.utcnow(),
     }
 
