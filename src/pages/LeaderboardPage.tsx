@@ -121,7 +121,18 @@ export default function LeaderboardPage() {
                             <span className="text-slate-500 font-bold">{a.rank}</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm font-extrabold text-slate-900">{a.name}</td>
+                        <td className="px-6 py-4 text-sm font-extrabold text-slate-900">
+                          <div className="flex items-center gap-3">
+                            {a.profile_photo ? (
+                              <img src={a.profile_photo} alt={a.name} className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase shadow-sm shrink-0">
+                                {a.name.slice(0, 2)}
+                              </div>
+                            )}
+                            {a.name}
+                          </div>
+                        </td>
                         <td className="px-6 py-4">
                           <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
                             {a.age_group || `${a.age} yrs`}

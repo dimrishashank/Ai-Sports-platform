@@ -117,6 +117,7 @@ def list_athletes():
             "gender": a.get("gender"),
             "location": a.get("location"),
             "tests": tests_count,
+            "profile_photo": a.get("profile_photo", ""),
             "avgPct": avg_pct,
             "status": a.get("status", "active"),
         })
@@ -184,6 +185,7 @@ def get_athlete(athlete_id):
             "name": athlete["name"],
             "email": athlete["email"],
             "age": athlete.get("age"),
+            "profile_photo": athlete.get("profile_photo", ""),
             "gender": athlete.get("gender"),
             "location": athlete.get("location"),
             "status": athlete.get("status", "active"),

@@ -201,8 +201,15 @@ export default function AdminAthletesPage() {
                       <td className="px-6 py-4">
                         <Link 
                           to={`/admin/athletes/${a.id}`}
-                          className="text-sm font-extrabold text-slate-900 hover:text-indigo-600 transition-colors"
+                          className="flex items-center gap-3 text-sm font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors"
                         >
+                          {a.profile_photo ? (
+                            <img src={a.profile_photo} alt={a.name} className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase shadow-sm shrink-0">
+                              {a.name.slice(0, 2)}
+                            </div>
+                          )}
                           {a.name}
                         </Link>
                       </td>

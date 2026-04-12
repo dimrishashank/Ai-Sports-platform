@@ -66,7 +66,11 @@ export default function AdminAthleteProfilePage() {
               <div className="h-32 bg-gray-100" />
               <div className="px-8 pb-8 -mt-12 text-center">
                 <div className="w-24 h-24 rounded-full bg-white border-4 border-white mx-auto flex items-center justify-center shadow-lg mb-4 overflow-hidden">
-                  <User className="w-12 h-12 text-gray-300" />
+                  {athlete.profile_photo ? (
+                    <img src={athlete.profile_photo} alt={athlete.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-12 h-12 text-gray-300" />
+                  )}
                 </div>
                 <h1 className="text-2xl font-bold text-gray-900 tracking-tight mb-1">{athlete.name}</h1>
                 <StatusBadge variant={athlete.status === 'active' ? 'success' : 'destructive'} className="mb-6">

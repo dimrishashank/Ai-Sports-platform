@@ -77,6 +77,7 @@ def get_leaderboard():
             "age_group": get_age_group_label(user.get("age", 0)),
             "gender": user.get("gender"),
             "location": user.get("location", ""),
+            "profile_photo": user.get("profile_photo", ""),
             "score": round(entry["avg_score"]),
             "percentile": round(entry["avg_pct"]),
         })
