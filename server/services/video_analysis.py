@@ -315,6 +315,10 @@ def analyze_video(video_path: str, test_type: str) -> dict:
                 
             form_score = max(0, form_score)
             print(f"Pattern match score: {form_score:.0%} (ref: {ref.get('correct_samples', 0)} correct, {ref.get('foul_samples', 0)} foul)")
+    except Exception as e:
+        # Reference patterns not available — use basic scoring
+        pass
+
     # ── ML Classifier prediction (if trained model exists) ──
     ml_prediction = None
     try:
