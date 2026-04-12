@@ -14,6 +14,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from bson import ObjectId
 from db import get_db
 from ai_training.trainer import extract_exercise_pattern, save_pattern_to_db, get_training_status
+from ai_training.classifier import train_form_classifier, train_rep_calibrator, get_classifier_stats
 from storage import get_drive_service, get_video_url
 from config import Config
 
@@ -199,6 +200,21 @@ def upload_training_video():
         ai_reps = pattern.get("rep_count", 0)
         rep_diff = abs(ai_reps - expected_reps) if expected_reps is not None else None
 
+        # 4) Auto-train ML classifier if we have enough samples
+        ml_result = None
+        try:
+            form_result = train_form_classifier(db, test_type)
+            rep_result = train_rep_calibrator(db, test_type)
+            ml_result = {
+                "form_model": form_result.get("model_trained", False),
+                "form_accuracy": form_result.get("accuracy"),
+                "rep_model": rep_result.get("model_trained", False),
+            }
+        except Exception as e:
+            print(f"Auto-train skipped: {e}")
+
+        quality = pattern.get("quality_scores", {})
+
         return jsonify({
             "message": "Training video processed successfully",
             "result": {
@@ -209,6 +225,10 @@ def upload_training_video():
                 "rep_difference": rep_diff,
                 "frames_analyzed": pattern.get("analyzed_frames", 0),
                 "visibility": round(pattern.get("visibility", {}).get("mean", 0) * 100),
+                "smoothness": quality.get("smoothness", 0),
+                "bilateral_score": quality.get("bilateral_score", 0),
+                "stability": quality.get("shoulder_stability", 0),
+                "ml_training": ml_result,
             }
         }), 201
 
@@ -361,6 +381,40 @@ def training_status():
     status = get_training_status(db)
 
     return jsonify({"training": status})
+
+
+@training_bp.route("/train-model", methods=["POST"])
+@jwt_required()
+def trigger_training():
+    """Manually trigger ML model training."""
+    _, err = _require_headadmin()
+    if err:
+        return err
+
+    db = get_db()
+    data = request.get_json() or {}
+    test_type = data.get("test_type")
+
+    form_result = train_form_classifier(db, test_type)
+    rep_result = train_rep_calibrator(db, test_type)
+
+    return jsonify({
+        "form_classifier": form_result,
+        "rep_calibrator": rep_result,
+    })
+
+
+@training_bp.route("/classifier-stats", methods=["GET"])
+@jwt_required()
+def classifier_stats():
+    """Get stats about trained ML classifiers."""
+    _, err = _require_headadmin()
+    if err:
+        return err
+
+    db = get_db()
+    stats = get_classifier_stats(db)
+    return jsonify({"classifier": stats})
 
 
 @training_bp.route("/export-dataset", methods=["GET"])

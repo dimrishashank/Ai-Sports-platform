@@ -315,8 +315,56 @@ def analyze_video(video_path: str, test_type: str) -> dict:
                 
             form_score = max(0, form_score)
             print(f"Pattern match score: {form_score:.0%} (ref: {ref.get('correct_samples', 0)} correct, {ref.get('foul_samples', 0)} foul)")
+    # ── ML Classifier prediction (if trained model exists) ──
+    ml_prediction = None
+    try:
+        from ai_training.classifier import predict_form, calibrate_reps
+        
+        # Build a pattern-like dict for the classifier
+        analysis_pattern = {
+            "angle_stats": {
+                "primary": quality_details if quality_details else {},
+                "secondary": {},
+                "body_line": {},
+                "hip_sag": {},
+            },
+            "bilateral_symmetry": {
+                "mean_diff": float(np.mean(bilateral_diffs)) if bilateral_diffs else 0,
+                "max_diff": float(np.max(bilateral_diffs)) if bilateral_diffs else 0,
+            },
+            "angular_velocity": {
+                "mean": quality_details.get("mean_velocity", 0),
+                "max": float(np.max(np.abs(ang_vel))) if 'ang_vel' in dir() and len(ang_vel) > 0 else 0,
+            },
+            "angular_acceleration": {
+                "mean": mean_abs_accel if 'mean_abs_accel' in dir() else 0,
+            },
+            "quality_scores": {
+                "smoothness": quality_details.get("smoothness", 0),
+                "shoulder_stability": quality_details.get("stability", 0),
+                "cadence_regularity": 0,
+                "bilateral_score": quality_details.get("bilateral_score", 0),
+            },
+            "visibility": {
+                "mean": avg_form,
+                "min": min(form_scores) if form_scores else 0,
+            },
+            "rep_duration_stats": {"mean": 0, "std": 0, "min": 0, "max": 0},
+        }
+        
+        ml_result = predict_form(analysis_pattern, test_type)
+        if ml_result.get("model_available"):
+            ml_prediction = ml_result
+            # Use ML form probability as additional signal
+            if ml_result["confidence"] > 0.7:
+                ml_form = ml_result["form_probability"]
+                # Blend: 40% threshold-based, 60% ML-based
+                form_score = 0.4 * form_score + 0.6 * ml_form
+        
+        # Apply rep calibration
+        rep_count = calibrate_reps(rep_count, test_type)
+        
     except Exception as e:
-        # Reference patterns not available — use basic scoring
         pass
 
     # Verdict: pass or flag
@@ -344,6 +392,7 @@ def analyze_video(video_path: str, test_type: str) -> dict:
         "flags": flags,
         "verdict": verdict,
         "quality_details": quality_details,
+        "ml_prediction": ml_prediction,
     }
 
 
