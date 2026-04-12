@@ -270,6 +270,9 @@ def list_training_samples():
             "gdrive_file_id": p.get("gdrive_file_id", ""),
             "frames_analyzed": pat.get("analyzed_frames", 0),
             "visibility": round(pat.get("visibility", {}).get("mean", 0) * 100),
+            "smoothness": pat.get("quality_scores", {}).get("smoothness", 0),
+            "stability": pat.get("quality_scores", {}).get("shoulder_stability", 0),
+            "bilateral_score": pat.get("quality_scores", {}).get("bilateral_score", 0),
             "created_at": p.get("created_at", "").isoformat() + "Z" if isinstance(p.get("created_at"), datetime) else str(p.get("created_at", "")),
         })
 

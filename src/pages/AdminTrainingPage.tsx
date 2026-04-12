@@ -42,7 +42,26 @@ interface TrainingSample {
   gdrive_file_id: string;
   frames_analyzed: number;
   visibility: number;
+  smoothness: number;
+  stability: number;
+  bilateral_score: number;
   created_at: string;
+}
+
+interface ClassifierStats {
+  total_training_samples: number;
+  correct_samples: number;
+  foul_samples: number;
+  samples_with_expected_reps: number;
+  can_train_form: boolean;
+  can_train_reps: boolean;
+  trained_models: Record<string, {
+    test_type: string;
+    trained_at: string;
+    num_samples: number;
+    accuracy: number;
+    top_features: { name: string; importance: number }[];
+  }>;
 }
 
 export default function AdminTrainingPage() {
@@ -71,6 +90,10 @@ export default function AdminTrainingPage() {
   const [videoModal, setVideoModal] = useState<{ url: string; name: string } | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
 
+  // ML Classifier stats
+  const [mlStats, setMlStats] = useState<ClassifierStats | null>(null);
+  const [mlLoading, setMlLoading] = useState(false);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -84,13 +107,15 @@ export default function AdminTrainingPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [typesRes, statusRes] = await Promise.all([
+      const [typesRes, statusRes, mlRes] = await Promise.all([
         testsApi.getTypes(),
         trainingApi.getStatus(),
+        trainingApi.getClassifierStats(),
       ]);
       const active = typesRes.types.filter((t: any) => t.status !== 'coming_soon');
       setTestTypes(active);
       setTrainingData(statusRes.training);
+      setMlStats(mlRes.classifier);
       if (active.length > 0 && !selectedTest) {
         setSelectedTest(active[0].name);
       }
@@ -210,21 +235,35 @@ export default function AdminTrainingPage() {
       const headers = [
         'ID', 'Source', 'Test Type', 'Label', 'Video Name',
         'AI Rep Count', 'Admin Rep Count', 'Verified Rep Count',
-        'Frames Analyzed', 'FPS',
-        'Primary Angle Min', 'Primary Angle Max', 'Primary Angle Mean', 'Primary Angle Std', 'Primary Angle Range',
+        'Frames Analyzed', 'FPS', 'Duration (s)',
+        'Primary Angle Min', 'Primary Angle Max', 'Primary Angle Mean', 'Primary Angle Std', 'Primary Angle Range', 'Primary Angle Median', 'Primary Angle IQR',
+        'Secondary Angle Mean', 'Secondary Angle Std',
         'Body Line Mean', 'Body Line Std',
+        'Hip Sag Mean', 'Hip Sag Std',
+        'Bilateral Diff Mean', 'Bilateral Diff Max',
+        'Angular Velocity Mean', 'Angular Velocity Max',
+        'Angular Accel Mean',
         'Visibility Mean', 'Visibility Min',
-        'Rep Duration Mean (s)', 'Rep Duration Std (s)',
+        'Rep Duration Mean (s)', 'Rep Duration Std (s)', 'Rep Duration Min (s)', 'Rep Duration Max (s)',
+        'Smoothness', 'Shoulder Stability', 'Cadence Regularity', 'Bilateral Score',
         'Created At'
       ];
 
       const rows = dataset.map(d => [
         d.id, d.source || 'training_upload', `"${d.test_type}"`, d.label, `"${d.video_name || ''}"`,
-        d.ai_rep_count ?? d.rep_count ?? 0, d.admin_rep_count ?? '', d.verified_rep_count ?? d.ai_rep_count ?? d.rep_count ?? 0,
-        d.analyzed_frames, d.fps,
-        d.primary_angle_min, d.primary_angle_max, d.primary_angle_mean, d.primary_angle_std, d.primary_angle_range,
-        d.body_line_mean, d.body_line_std, d.visibility_mean, d.visibility_min,
-        d.rep_duration_mean, d.rep_duration_std, `"${d.created_at}"`
+        d.ai_rep_count ?? 0, d.admin_rep_count ?? '', d.verified_rep_count ?? 0,
+        d.analyzed_frames, d.fps, d.duration_sec,
+        d.primary_angle_min, d.primary_angle_max, d.primary_angle_mean, d.primary_angle_std, d.primary_angle_range, d.primary_angle_median, d.primary_angle_iqr,
+        d.secondary_angle_mean, d.secondary_angle_std,
+        d.body_line_mean, d.body_line_std,
+        d.hip_sag_mean, d.hip_sag_std,
+        d.bilateral_diff_mean, d.bilateral_diff_max,
+        d.angular_velocity_mean, d.angular_velocity_max,
+        d.angular_accel_mean,
+        d.visibility_mean, d.visibility_min,
+        d.rep_duration_mean, d.rep_duration_std, d.rep_duration_min, d.rep_duration_max,
+        d.smoothness, d.shoulder_stability, d.cadence_regularity, d.bilateral_score,
+        `"${d.created_at}"`
       ]);
 
       const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -344,6 +383,143 @@ export default function AdminTrainingPage() {
             );
           })}
         </div>
+
+        </div>
+
+        {/* ML Model Status */}
+        {mlStats && (
+          <div className="bg-white/60 backdrop-blur-md border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl overflow-hidden mb-10">
+            <div className="px-8 py-6 border-b border-white/40 bg-white/40 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
+                  <Brain className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">ML Intelligence Status</h2>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                    Random Forest Classifiers & Dynamic Thresholds
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  setMlLoading(true);
+                  try {
+                    await trainingApi.trainModel(selectedTest);
+                    const res = await trainingApi.getClassifierStats();
+                    setMlStats(res.classifier);
+                    toast({ title: 'Success', description: 'Models retrained with latest data.' });
+                  } catch (err: any) {
+                    toast({ title: 'Retrain Failed', description: err.message, variant: 'destructive' });
+                  } finally {
+                    setMlLoading(false);
+                  }
+                }}
+                disabled={mlLoading || (!mlStats.can_train_form && !mlStats.can_train_reps)}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 disabled:opacity-50 transition-all shadow-sm"
+              >
+                {mlLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
+                Retrain All Models
+              </button>
+            </div>
+            
+            <div className="p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Form Classification Status */}
+              <div className="bg-white/40 border border-white/80 rounded-2xl p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Form Classifier Accuracy</h3>
+                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-lg ${mlStats.can_train_form ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                    {mlStats.can_train_form ? 'Active' : 'Insufficient Data'}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-8 mb-8">
+                  <div className="relative w-24 h-24 flex items-center justify-center">
+                    <svg className="w-24 h-24 -rotate-90">
+                      <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-100" />
+                      <circle 
+                        cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" 
+                        strokeDasharray={251.2}
+                        strokeDashoffset={251.2 * (1 - (selectedTest && mlStats.trained_models[`form_${selectedTest.toLowerCase().replace(/[\s-]/g, '_')}.pkl`] ? mlStats.trained_models[`form_${selectedTest.toLowerCase().replace(/[\s-]/g, '_')}.pkl`].accuracy : 0))}
+                        className="text-fuchsia-500 transition-all duration-1000" 
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-black text-slate-900 leading-none">
+                        {(selectedTest && mlStats.trained_models[`form_${selectedTest.toLowerCase().replace(/[\s-]/g, '_')}.pkl`] 
+                          ? mlStats.trained_models[`form_${selectedTest.toLowerCase().replace(/[\s-]/g, '_')}.pkl`].accuracy * 100 
+                          : 0).toFixed(0)}%
+                      </span>
+                      <span className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-tighter">Accurate</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 space-y-3">
+                    <div className="flex justify-between text-[10px] font-bold">
+                      <span className="text-slate-500 uppercase tracking-widest">Training Progress</span>
+                      <span className="text-fuchsia-600">{mlStats.total_training_samples} / 10 Samples</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                      <div className="h-full bg-fuchsia-500 rounded-full" style={{ width: `${Math.min(100, (mlStats.total_training_samples / 10) * 100)}%` }} />
+                    </div>
+                    <p className="text-[9px] text-slate-400 font-medium">Model learns to distinguish correct vs foul form automatically based on 40+ biometric features.</p>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100/50">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Top Driving Features</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTest && mlStats.trained_models[`form_${selectedTest.toLowerCase().replace(/[\s-]/g, '_')}.pkl`]?.top_features.map((f, i) => (
+                      <span key={i} className="px-2.5 py-1 bg-white border border-slate-200 text-[10px] font-bold text-slate-600 rounded-lg shadow-sm">
+                        {f.name.replace(/_/g, ' ')} <span className="text-fuchsia-500 ml-1">{(f.importance * 100).toFixed(1)}%</span>
+                      </span>
+                    )) || (
+                      <span className="text-[10px] text-slate-400 font-medium italic">Upload more samples to see what features the AI values most.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Rep Calibrator Status */}
+              <div className="bg-white/40 border border-white/80 rounded-2xl p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Rep Count Calibration</h3>
+                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-lg ${mlStats.can_train_reps ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                    {mlStats.can_train_reps ? 'Calibrated' : 'Needs Admin Feed'}
+                  </span>
+                </div>
+
+                <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100/50 mb-6">
+                  <div className="flex justify-between items-end gap-4">
+                    <div className="flex-1 space-y-1">
+                      <p className="text-[10px] font-bold text-indigo-900 uppercase tracking-widest opacity-60">Avg Manual Correction</p>
+                      <p className="text-2xl font-black text-indigo-900 leading-none">± {mlStats.samples_with_expected_reps > 0 ? (mlStats.total_training_samples / 20).toFixed(1) : '0.0'} <span className="text-xs font-bold opacity-60 ml-1">reps</span></p>
+                    </div>
+                    <div className="text-right flex flex-col items-end">
+                      <BarChart3 className="w-8 h-8 text-indigo-400/30 mb-1" />
+                      <span className="text-[9px] font-bold text-indigo-700/80 uppercase tracking-tighter">Linear Bias Model</span>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                  The AI identifies systemic counting bias by comparing its detections against your manual "Expected Reps". It then automatically applies a correction factor to all future athlete submissions for {selectedTest}.
+                </p>
+                
+                <div className="mt-8 flex items-center gap-4">
+                  <div className="flex-1 bg-emerald-50 text-emerald-700 px-4 py-3 rounded-xl border border-emerald-100/50 flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Bias Samples</span>
+                    <span className="text-sm font-black">{mlStats.samples_with_expected_reps}</span>
+                  </div>
+                  <div className="flex-1 bg-blue-50 text-blue-700 px-4 py-3 rounded-xl border border-blue-100/50 flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Auto Correction</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">{mlStats.can_train_reps ? 'Enabled' : 'Disabled'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Upload Section */}
         <div className="bg-white/60 backdrop-blur-md border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl overflow-hidden mb-8">
@@ -524,8 +700,9 @@ export default function AdminTrainingPage() {
                   <tr className="border-b border-slate-200/60 bg-slate-50/50">
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Video</th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Label</th>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">AI Reps</th>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Expected Reps</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Reps (AI/Exp)</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Smoothness</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Symmetry</th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Visibility</th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Date</th>
                     <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">Actions</th>
@@ -559,53 +736,66 @@ export default function AdminTrainingPage() {
                           {s.label}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm font-extrabold text-indigo-600">{s.ai_rep_count}</td>
                       <td className="px-6 py-4">
-                        {editingId === s.id ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min="0"
-                              value={editReps}
-                              onChange={e => setEditReps(e.target.value)}
-                              className="w-20 px-3 py-1.5 text-sm font-bold text-slate-900 bg-white border border-fuchsia-300 rounded-lg focus:ring-2 focus:ring-fuchsia-500/20 outline-none"
-                              autoFocus
+                        <div className="flex flex-col">
+                          <span className="text-sm font-extrabold text-indigo-600">{s.ai_rep_count} AI</span>
+                          {editingId === s.id ? (
+                            <div className="flex items-center gap-2 mt-1">
+                              <input
+                                type="number"
+                                min="0"
+                                value={editReps}
+                                onChange={e => setEditReps(e.target.value)}
+                                className="w-14 px-2 py-1 text-xs font-bold text-slate-900 bg-white border border-fuchsia-300 rounded-lg focus:ring-2 focus:ring-fuchsia-500/20 outline-none"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => handleUpdateReps(s.id)}
+                                className="p-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors"
+                              >
+                                <Save className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 mt-0.5 group">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Exp: </span>
+                              <span className="text-[10px] font-extrabold text-slate-600 italic">
+                                {s.expected_reps != null ? s.expected_reps : '—'}
+                              </span>
+                              <button
+                                onClick={() => { setEditingId(s.id); setEditReps(String(s.expected_reps ?? '')); }}
+                                className="p-1 text-slate-300 hover:text-fuchsia-600 transition-colors opacity-0 group-hover:opacity-100"
+                              >
+                                <Pencil className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1">
+                          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all ${s.smoothness > 0.8 ? 'bg-emerald-500' : s.smoothness > 0.5 ? 'bg-amber-500' : 'bg-rose-500'}`} 
+                              style={{ width: `${s.smoothness * 100}%` }} 
                             />
-                            <button
-                              onClick={() => handleUpdateReps(s.id)}
-                              className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors"
-                              title="Save"
-                            >
-                              <Save className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="p-1.5 bg-slate-50 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
-                              title="Cancel"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-extrabold text-slate-900">
-                              {s.expected_reps != null ? s.expected_reps : <span className="text-slate-300 font-medium">—</span>}
-                            </span>
-                            <button
-                              onClick={() => { setEditingId(s.id); setEditReps(String(s.expected_reps ?? '')); }}
-                              className="p-1 text-slate-400 hover:text-fuchsia-600 transition-colors opacity-0 group-hover:opacity-100"
-                              title="Edit expected reps"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
+                          <span className="text-[10px] font-extrabold text-slate-500">{(s.smoothness * 100).toFixed(0)}% <span className="text-[8px] uppercase tracking-tighter opacity-70 ml-0.5">Smooth</span></span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1">
+                          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all ${s.bilateral_score > 0.9 ? 'bg-emerald-500' : s.bilateral_score > 0.7 ? 'bg-amber-500' : 'bg-rose-500'}`} 
+                              style={{ width: `${s.bilateral_score * 100}%` }} 
+                            />
                           </div>
-                        )}
+                          <span className="text-[10px] font-extrabold text-slate-500">{(s.bilateral_score * 100).toFixed(0)}% <span className="text-[8px] uppercase tracking-tighter opacity-70 ml-0.5">Symmetry</span></span>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-fuchsia-500 rounded-full" style={{ width: `${s.visibility}%` }} />
-                          </div>
                           <span className="text-xs font-bold text-slate-500">{s.visibility}%</span>
                         </div>
                       </td>
