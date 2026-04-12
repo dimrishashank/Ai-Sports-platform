@@ -114,11 +114,7 @@ export default function LoginPage() {
                 Register Here
               </Link>
             </p>
-            <div className="mt-6 flex flex-col gap-1.5 p-4 bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl text-xs text-slate-500 text-left font-medium shadow-inner">
-              <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />HEAD ADMIN: admin@sai.gov.in / admin123</span>
-              <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />SUB-ADMIN: subadmin@sai.gov.in / subadmin123</span>
-              <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />ATHLETE: rahul@example.com / athlete123</span>
-            </div>
+
           </div>
         </div>
       </div>
