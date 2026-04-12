@@ -1,0 +1,18 @@
+{
+  "name": "SAI Sports Platform",
+  "short_name": "SAI Sports",
+  "description": "AI-Based Sports Talent Analysis Platform - Record fitness tests, get AI analysis, and rank against SAI benchmarks",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["sports", "fitness", "health"]
+}
