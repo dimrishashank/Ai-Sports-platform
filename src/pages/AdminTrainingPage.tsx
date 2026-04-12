@@ -384,8 +384,6 @@ export default function AdminTrainingPage() {
           })}
         </div>
 
-        </div>
-
         {/* ML Model Status */}
         {mlStats && (
           <div className="bg-white/60 backdrop-blur-md border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl overflow-hidden mb-10">
