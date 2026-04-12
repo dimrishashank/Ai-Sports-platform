@@ -150,9 +150,16 @@ def list_messages():
 
     result = []
     for m in messages:
+        profile_photo = ""
+        if m.get("user_id"):
+            u = db.users.find_one({"_id": m["user_id"]})
+            if u:
+                profile_photo = u.get("profile_photo", "")
+
         result.append({
             "id": str(m["_id"]),
             "name": m.get("name", "Unknown"),
+            "profile_photo": profile_photo,
             "email": m.get("email", ""),
             "subject": m.get("subject", ""),
             "message": m.get("message", ""),

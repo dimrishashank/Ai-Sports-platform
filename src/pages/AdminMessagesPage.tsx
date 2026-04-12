@@ -181,12 +181,16 @@ export default function AdminMessagesPage() {
 
                 <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                      <User className="w-4 h-4 text-gray-500" />
+                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm">
+                      {msg.profile_photo ? (
+                         <img src={msg.profile_photo} alt={msg.name} className="w-full h-full object-cover" />
+                      ) : (
+                         <User className="w-4 h-4 text-slate-400" />
+                      )}
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-gray-900">{msg.name}</p>
-                      <p className="text-[10px] text-gray-500 truncate max-w-[120px]">{msg.email}</p>
+                      <p className="text-xs font-bold text-slate-900">{msg.name}</p>
+                      <p className="text-[10px] text-slate-500 truncate max-w-[120px] font-medium">{msg.email}</p>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
