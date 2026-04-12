@@ -382,9 +382,15 @@ def export_training_dataset():
     for p in patterns:
         pat = p.get("pattern", {})
         primary = pat.get("angle_stats", {}).get("primary", {})
+        secondary = pat.get("angle_stats", {}).get("secondary", {})
         body_line = pat.get("angle_stats", {}).get("body_line", {})
+        hip_sag = pat.get("angle_stats", {}).get("hip_sag", {})
         vis = pat.get("visibility", {})
         rep_dur = pat.get("rep_duration_stats", {})
+        bilateral = pat.get("bilateral_symmetry", {})
+        ang_vel = pat.get("angular_velocity", {})
+        ang_accel = pat.get("angular_acceleration", {})
+        quality = pat.get("quality_scores", {})
 
         dataset.append({
             "id": str(p["_id"]),
@@ -397,17 +403,46 @@ def export_training_dataset():
             "verified_rep_count": p.get("verified_rep_count", pat.get("rep_count", 0)),
             "analyzed_frames": pat.get("analyzed_frames", 0),
             "fps": pat.get("fps", 0),
+            "duration_sec": pat.get("duration_sec", 0),
+            # Primary angle (bilateral averaged)
             "primary_angle_min": round(primary.get("min", 0), 2),
             "primary_angle_max": round(primary.get("max", 0), 2),
             "primary_angle_mean": round(primary.get("mean", 0), 2),
             "primary_angle_std": round(primary.get("std", 0), 2),
             "primary_angle_range": round(primary.get("range", 0), 2),
+            "primary_angle_median": round(primary.get("median", 0), 2),
+            "primary_angle_iqr": round(primary.get("iqr", 0), 2),
+            # Secondary angle
+            "secondary_angle_mean": round(secondary.get("mean", 0), 2),
+            "secondary_angle_std": round(secondary.get("std", 0), 2),
+            # Body line
             "body_line_mean": round(body_line.get("mean", 0), 2),
             "body_line_std": round(body_line.get("std", 0), 2),
+            # Hip sag
+            "hip_sag_mean": round(hip_sag.get("mean", 0), 2),
+            "hip_sag_std": round(hip_sag.get("std", 0), 2),
+            # Bilateral symmetry
+            "bilateral_diff_mean": round(bilateral.get("mean_diff", 0), 2),
+            "bilateral_diff_max": round(bilateral.get("max_diff", 0), 2),
+            # Angular velocity
+            "angular_velocity_mean": round(ang_vel.get("mean", 0), 2),
+            "angular_velocity_max": round(ang_vel.get("max", 0), 2),
+            # Angular acceleration
+            "angular_accel_mean": round(ang_accel.get("mean", 0), 2),
+            # Visibility
             "visibility_mean": round(vis.get("mean", 0), 4),
             "visibility_min": round(vis.get("min", 0), 4),
+            # Rep timing
             "rep_duration_mean": round(rep_dur.get("mean", 0), 3),
             "rep_duration_std": round(rep_dur.get("std", 0), 3),
+            "rep_duration_min": round(rep_dur.get("min", 0), 3),
+            "rep_duration_max": round(rep_dur.get("max", 0), 3),
+            # Quality scores
+            "smoothness": round(quality.get("smoothness", 0), 4),
+            "shoulder_stability": round(quality.get("shoulder_stability", 0), 6),
+            "cadence_regularity": round(quality.get("cadence_regularity", 0), 4),
+            "bilateral_score": round(quality.get("bilateral_score", 0), 4),
+            # Metadata
             "created_at": p.get("created_at", "").isoformat() if p.get("created_at") else "",
         })
 
@@ -430,19 +465,18 @@ def export_training_dataset():
             "ai_rep_count": ai_reps,
             "admin_rep_count": admin_reps,
             "verified_rep_count": verified,
-            "analyzed_frames": 0,
-            "fps": 0,
-            "primary_angle_min": 0,
-            "primary_angle_max": 0,
-            "primary_angle_mean": 0,
-            "primary_angle_std": 0,
-            "primary_angle_range": 0,
-            "body_line_mean": 0,
-            "body_line_std": 0,
-            "visibility_mean": 0,
-            "visibility_min": 0,
-            "rep_duration_mean": 0,
-            "rep_duration_std": 0,
+            "analyzed_frames": 0, "fps": 0, "duration_sec": 0,
+            "primary_angle_min": 0, "primary_angle_max": 0, "primary_angle_mean": 0,
+            "primary_angle_std": 0, "primary_angle_range": 0, "primary_angle_median": 0, "primary_angle_iqr": 0,
+            "secondary_angle_mean": 0, "secondary_angle_std": 0,
+            "body_line_mean": 0, "body_line_std": 0,
+            "hip_sag_mean": 0, "hip_sag_std": 0,
+            "bilateral_diff_mean": 0, "bilateral_diff_max": 0,
+            "angular_velocity_mean": 0, "angular_velocity_max": 0,
+            "angular_accel_mean": 0,
+            "visibility_mean": 0, "visibility_min": 0,
+            "rep_duration_mean": 0, "rep_duration_std": 0, "rep_duration_min": 0, "rep_duration_max": 0,
+            "smoothness": 0, "shoulder_stability": 0, "cadence_regularity": 0, "bilateral_score": 0,
             "created_at": s.get("rep_verified_at", "").isoformat() if s.get("rep_verified_at") else s.get("date", ""),
         })
 
