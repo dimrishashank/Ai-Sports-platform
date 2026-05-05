@@ -13,7 +13,7 @@
 
 | Specialization | SAP ID | Name |
 |---|---|---|
-| B.Tech CSE (AI & ML) | 5001243977 | Shashank Dimri |
+| B.Tech CSE (AI & ML) | 500124397 | Shashank Dimri |
 
 **AI Cluster**
 **School of Computer Science**
