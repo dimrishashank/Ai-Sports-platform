@@ -14,7 +14,7 @@ _service = None
 
 TOKEN_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'token.json')
 
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
+SCOPES = ['https://www.googleapis.com/auth/drive']
 
 
 def get_drive_service():
@@ -198,6 +198,40 @@ def stream_video(file_id: str):
     except Exception as e:
         print(f"❌ Video stream failed: {e}")
         return None, None
+
+
+def find_file_by_name(name_query: str):
+    """
+    Search for a file in the Drive folder by name (prefix match).
+    Returns the file ID if found, or None.
+    """
+    service = get_drive_service()
+    if not service:
+        return None
+
+    folder_id = Config.GOOGLE_DRIVE_FOLDER_ID
+    try:
+        q = f"name contains '{name_query}'"
+        if folder_id:
+            q += f" and '{folder_id}' in parents"
+        q += " and trashed = false"
+
+        results = service.files().list(
+            q=q,
+            spaces='drive',
+            fields='files(id, name, mimeType)',
+            pageSize=5,
+            orderBy='name'
+        ).execute()
+
+        files = results.get('files', [])
+        if files:
+            print(f"✅ Found demo video: {files[0]['name']} (ID: {files[0]['id']})")
+            return files[0]
+        return None
+    except Exception as e:
+        print(f"❌ Drive file search failed: {e}")
+        return None
 
 
 def delete_video(file_id: str):

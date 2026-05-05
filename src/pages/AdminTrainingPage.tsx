@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import { trainingApi, testsApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { DemoVideoManager } from '@/components/admin/DemoVideoManager';
 import { ExportButton } from '@/components/common/ExportButton';
 import { toast } from '@/components/ui/use-toast';
 import {
@@ -64,12 +65,13 @@ interface ClassifierStats {
   }>;
 }
 
-export default function AdminTrainingPage() {
+function AdminTrainingPageInner() {
   const { user } = useAuth();
   const isHeadAdmin = user?.role === 'headadmin';
   const [testTypes, setTestTypes] = useState<any[]>([]);
   const [trainingData, setTrainingData] = useState<TrainingStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Upload state
   const [selectedTest, setSelectedTest] = useState('');
@@ -106,21 +108,46 @@ export default function AdminTrainingPage() {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const [typesRes, statusRes, mlRes] = await Promise.all([
+      // Load each independently so one failure doesn't blank the page
+      const [typesRes, statusRes, mlRes] = await Promise.allSettled([
         testsApi.getTypes(),
         trainingApi.getStatus(),
         trainingApi.getClassifierStats(),
       ]);
-      const active = typesRes.types.filter((t: any) => t.status !== 'coming_soon');
-      setTestTypes(active);
-      setTrainingData(statusRes.training);
-      setMlStats(mlRes.classifier);
-      if (active.length > 0 && !selectedTest) {
-        setSelectedTest(active[0].name);
+
+      console.log('[AI Training] API results:', {
+        types: typesRes.status,
+        status: statusRes.status,
+        ml: mlRes.status,
+      });
+
+      if (typesRes.status === 'fulfilled') {
+        const active = typesRes.value.types.filter((t: any) => t.status !== 'coming_soon');
+        setTestTypes(active);
+        if (active.length > 0 && !selectedTest) {
+          setSelectedTest(active[0].name);
+        }
+      } else {
+        console.error('[AI Training] Types failed:', typesRes.reason);
+        setLoadError('Failed to load test types. Please check your connection and try again.');
       }
-    } catch (err) {
+
+      if (statusRes.status === 'fulfilled') {
+        setTrainingData(statusRes.value.training);
+      } else {
+        console.error('[AI Training] Status failed:', statusRes.reason);
+      }
+
+      if (mlRes.status === 'fulfilled') {
+        setMlStats(mlRes.value.classifier);
+      } else {
+        console.error('[AI Training] ML stats failed:', mlRes.reason);
+      }
+    } catch (err: any) {
       console.error('Failed to load training data:', err);
+      setLoadError(err?.message || 'Unknown error loading training data');
     } finally {
       setLoading(false);
     }
@@ -309,6 +336,13 @@ export default function AdminTrainingPage() {
   return (
     <DashboardLayout>
       <div className="px-6 py-8">
+        {/* Error banner */}
+        {loadError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-medium flex items-center justify-between">
+            <span>⚠️ {loadError}</span>
+            <button onClick={loadData} className="px-3 py-1 bg-red-100 hover:bg-red-200 rounded-lg text-xs font-bold transition-colors">Retry</button>
+          </div>
+        )}
         {/* Header */}
         <div className="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -403,10 +437,17 @@ export default function AdminTrainingPage() {
                 onClick={async () => {
                   setMlLoading(true);
                   try {
-                    await trainingApi.trainModel(selectedTest);
+                    // Train models for each test type
+                    for (const t of testTypes) {
+                      try {
+                        await trainingApi.trainModel(t.name);
+                      } catch (e) {
+                        console.warn(`Train ${t.name} skipped:`, e);
+                      }
+                    }
                     const res = await trainingApi.getClassifierStats();
                     setMlStats(res.classifier);
-                    toast({ title: 'Success', description: 'Models retrained with latest data.' });
+                    toast({ title: 'Success', description: 'All models retrained with latest data.' });
                   } catch (err: any) {
                     toast({ title: 'Retrain Failed', description: err.message, variant: 'destructive' });
                   } finally {
@@ -422,7 +463,7 @@ export default function AdminTrainingPage() {
             </div>
             
             <div className="p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Form Classification Status */}
+              {/* Form Classification Status — Per-Test Breakdown */}
               <div className="bg-white/40 border border-white/80 rounded-2xl p-6 shadow-sm">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Form Classifier Accuracy</h3>
@@ -431,48 +472,82 @@ export default function AdminTrainingPage() {
                   </span>
                 </div>
                 
-                <div className="flex items-center gap-8 mb-8">
-                  <div className="relative w-24 h-24 flex items-center justify-center">
-                    <svg className="w-24 h-24 -rotate-90">
-                      <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-100" />
-                      <circle 
-                        cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" 
-                        strokeDasharray={251.2}
-                        strokeDashoffset={251.2 * (1 - (selectedTest && mlStats.trained_models[`form_${selectedTest.toLowerCase().replace(/[\s-]/g, '_')}.pkl`] ? mlStats.trained_models[`form_${selectedTest.toLowerCase().replace(/[\s-]/g, '_')}.pkl`].accuracy : 0))}
-                        className="text-fuchsia-500 transition-all duration-1000" 
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl font-black text-slate-900 leading-none">
-                        {(selectedTest && mlStats.trained_models[`form_${selectedTest.toLowerCase().replace(/[\s-]/g, '_')}.pkl`] 
-                          ? mlStats.trained_models[`form_${selectedTest.toLowerCase().replace(/[\s-]/g, '_')}.pkl`].accuracy * 100 
-                          : 0).toFixed(0)}%
-                      </span>
-                      <span className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-tighter">Accurate</span>
-                    </div>
+                {/* Per-Test Accuracy Grid */}
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                  {testTypes.map((t) => {
+                    const modelKey = `form_${t.name.toLowerCase().replace(/[\s-]/g, '_')}.pkl`;
+                    const model = mlStats.trained_models?.[modelKey];
+                    const acc = model ? model.accuracy * 100 : 0;
+                    const samples = model ? model.num_samples : 0;
+                    const isSelected = selectedTest === t.name;
+                    const Icon = TEST_ICONS[t.name] || Target;
+                    const ringColor = model ? (acc >= 90 ? 'text-emerald-500' : acc >= 70 ? 'text-amber-500' : 'text-rose-500') : 'text-slate-200';
+                    
+                    return (
+                      <div 
+                        key={t.name} 
+                        onClick={() => setSelectedTest(t.name)}
+                        className={`flex flex-col items-center p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                          isSelected ? 'bg-fuchsia-50/80 border-2 border-fuchsia-400 shadow-sm' : 'bg-slate-50/50 border border-slate-100 hover:border-fuchsia-200 hover:bg-fuchsia-50/30'
+                        }`}
+                      >
+                        <div className="relative w-16 h-16 flex items-center justify-center mb-2">
+                          <svg className="w-16 h-16 -rotate-90">
+                            <circle cx="32" cy="32" r="26" stroke="currentColor" strokeWidth="5" fill="transparent" className="text-slate-100" />
+                            <circle 
+                              cx="32" cy="32" r="26" stroke="currentColor" strokeWidth="5" fill="transparent" 
+                              strokeDasharray={163.4}
+                              strokeDashoffset={163.4 * (1 - (model ? model.accuracy : 0))}
+                              className={`${ringColor} transition-all duration-1000`}
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-sm font-black text-slate-900 leading-none">
+                              {model ? `${acc.toFixed(0)}%` : '—'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <Icon className="w-3.5 h-3.5 text-slate-500" />
+                          <span className="text-[10px] font-extrabold text-slate-700 uppercase tracking-wider">{t.name}</span>
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-400">
+                          {model ? `${samples} samples` : 'No model'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Training Progress for selected test */}
+                <div className="mb-6">
+                  <div className="flex justify-between text-[10px] font-bold mb-2">
+                    <span className="text-slate-500 uppercase tracking-widest">
+                      {selectedTest} Training
+                    </span>
+                    <span className="text-fuchsia-600">{mlStats.total_training_samples} total samples</span>
                   </div>
-                  
-                  <div className="flex-1 space-y-3">
-                    <div className="flex justify-between text-[10px] font-bold">
-                      <span className="text-slate-500 uppercase tracking-widest">Training Progress</span>
-                      <span className="text-fuchsia-600">{mlStats.total_training_samples} / 10 Samples</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                      <div className="h-full bg-fuchsia-500 rounded-full" style={{ width: `${Math.min(100, (mlStats.total_training_samples / 10) * 100)}%` }} />
-                    </div>
-                    <p className="text-[9px] text-slate-400 font-medium">Model learns to distinguish correct vs foul form automatically based on 40+ biometric features.</p>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                    <div className="h-full bg-fuchsia-500 rounded-full" style={{ width: `${Math.min(100, (mlStats.total_training_samples / 10) * 100)}%` }} />
                   </div>
+                  <p className="text-[9px] text-slate-400 font-medium mt-2">Model learns to distinguish correct vs foul form automatically based on 28 biometric features.</p>
                 </div>
 
                 <div className="pt-4 border-t border-slate-100/50">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Top Driving Features</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+                    Top Driving Features — <span className="text-fuchsia-600">{selectedTest}</span>
+                  </p>
                   <div className="flex flex-wrap gap-2">
-                    {selectedTest && mlStats.trained_models[`form_${selectedTest.toLowerCase().replace(/[\s-]/g, '_')}.pkl`]?.top_features.map((f, i) => (
-                      <span key={i} className="px-2.5 py-1 bg-white border border-slate-200 text-[10px] font-bold text-slate-600 rounded-lg shadow-sm">
-                        {f.name.replace(/_/g, ' ')} <span className="text-fuchsia-500 ml-1">{(f.importance * 100).toFixed(1)}%</span>
-                      </span>
-                    )) || (
-                      <span className="text-[10px] text-slate-400 font-medium italic">Upload more samples to see what features the AI values most.</span>
+                    {selectedTest && mlStats.trained_models[`form_${selectedTest.toLowerCase().replace(/[\s-]/g, '_')}.pkl`]?.top_features?.map((f: any, i: number) => {
+                      const fname = typeof f === 'object' && !Array.isArray(f) ? f.name : (Array.isArray(f) ? f[0] : String(f));
+                      const fimp = typeof f === 'object' && !Array.isArray(f) ? f.importance : (Array.isArray(f) ? f[1] : 0);
+                      return (
+                        <span key={i} className="px-2.5 py-1 bg-white border border-slate-200 text-[10px] font-bold text-slate-600 rounded-lg shadow-sm">
+                          {String(fname || '').replace(/_/g, ' ')} <span className="text-fuchsia-500 ml-1">{(Number(fimp || 0) * 100).toFixed(1)}%</span>
+                        </span>
+                      );
+                    }) || (
+                      <span className="text-[10px] text-slate-400 font-medium italic">Upload more samples for {selectedTest} to see what features the AI values most.</span>
                     )}
                   </div>
                 </div>
@@ -490,8 +565,8 @@ export default function AdminTrainingPage() {
                 <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100/50 mb-6">
                   <div className="flex justify-between items-end gap-4">
                     <div className="flex-1 space-y-1">
-                      <p className="text-[10px] font-bold text-indigo-900 uppercase tracking-widest opacity-60">Avg Manual Correction</p>
-                      <p className="text-2xl font-black text-indigo-900 leading-none">± {mlStats.samples_with_expected_reps > 0 ? (mlStats.total_training_samples / 20).toFixed(1) : '0.0'} <span className="text-xs font-bold opacity-60 ml-1">reps</span></p>
+                      <p className="text-[10px] font-bold text-indigo-900 uppercase tracking-widest opacity-60">Avg Manual Correction — <span className="text-indigo-600">{selectedTest}</span></p>
+                      <p className="text-2xl font-black text-indigo-900 leading-none">± {mlStats.per_test?.[selectedTest]?.avg_rep_correction ?? mlStats.avg_rep_correction ?? '0.0'} <span className="text-xs font-bold opacity-60 ml-1">reps</span></p>
                     </div>
                     <div className="text-right flex flex-col items-end">
                       <BarChart3 className="w-8 h-8 text-indigo-400/30 mb-1" />
@@ -506,8 +581,8 @@ export default function AdminTrainingPage() {
                 
                 <div className="mt-8 flex items-center gap-4">
                   <div className="flex-1 bg-emerald-50 text-emerald-700 px-4 py-3 rounded-xl border border-emerald-100/50 flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Bias Samples</span>
-                    <span className="text-sm font-black">{mlStats.samples_with_expected_reps}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Bias Samples ({selectedTest})</span>
+                    <span className="text-sm font-black">{mlStats.per_test?.[selectedTest]?.with_reps ?? mlStats.samples_with_expected_reps}</span>
                   </div>
                   <div className="flex-1 bg-blue-50 text-blue-700 px-4 py-3 rounded-xl border border-blue-100/50 flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Auto Correction</span>
@@ -866,6 +941,14 @@ export default function AdminTrainingPage() {
         </div>
       )}
 
+
+      {/* Demo Video Manager — HeadAdmin only */}
+      {isHeadAdmin && (
+        <div className="mt-10">
+          <DemoVideoManager />
+        </div>
+      )}
+
       {/* Video Loading Overlay */}
       {videoLoading && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
@@ -876,5 +959,47 @@ export default function AdminTrainingPage() {
         </div>
       )}
     </DashboardLayout>
+  );
+}
+
+// Error Boundary to catch runtime crashes and show error instead of blank screen
+class TrainingErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean; error: Error | null}> {
+  constructor(props: {children: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[AI Training] Component crash:', error, info.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <DashboardLayout>
+          <div className="px-6 py-8">
+            <div className="max-w-xl mx-auto bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
+              <h2 className="text-xl font-bold text-red-700 mb-2">AI Training Page Error</h2>
+              <p className="text-sm text-red-600 mb-4">{this.state.error?.message}</p>
+              <pre className="text-xs text-left bg-red-100 p-4 rounded-lg overflow-auto max-h-48 mb-4 text-red-800">{this.state.error?.stack}</pre>
+              <button
+                onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+                className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors"
+              >Reload Page</button>
+            </div>
+          </div>
+        </DashboardLayout>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function AdminTrainingPage() {
+  return (
+    <TrainingErrorBoundary>
+      <AdminTrainingPageInner />
+    </TrainingErrorBoundary>
   );
 }

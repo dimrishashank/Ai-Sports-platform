@@ -381,13 +381,48 @@ def get_classifier_stats(db) -> dict:
     foul = db.exercise_patterns.count_documents({"label": "foul"})
     with_reps = db.exercise_patterns.count_documents({"expected_reps": {"$ne": None, "$exists": True}})
 
+    # Compute actual avg rep correction from real data
+    avg_rep_correction = 0.0
+    rep_samples = list(db.exercise_patterns.find(
+        {"expected_reps": {"$ne": None, "$exists": True}, "ai_rep_count": {"$exists": True}},
+        {"expected_reps": 1, "ai_rep_count": 1}
+    ))
+    if rep_samples:
+        diffs = [abs(s.get("expected_reps", 0) - s.get("ai_rep_count", 0)) for s in rep_samples]
+        avg_rep_correction = round(sum(diffs) / len(diffs), 1)
+
+    # Per-test breakdown
+    per_test = {}
+    for test_type_doc in db.exercise_patterns.distinct("test_type"):
+        t_correct = db.exercise_patterns.count_documents({"test_type": test_type_doc, "label": "correct"})
+        t_foul = db.exercise_patterns.count_documents({"test_type": test_type_doc, "label": "foul"})
+        t_reps = db.exercise_patterns.count_documents({"test_type": test_type_doc, "expected_reps": {"$ne": None, "$exists": True}})
+        # Per-test avg correction
+        t_rep_samples = list(db.exercise_patterns.find(
+            {"test_type": test_type_doc, "expected_reps": {"$ne": None, "$exists": True}, "ai_rep_count": {"$exists": True}},
+            {"expected_reps": 1, "ai_rep_count": 1}
+        ))
+        t_avg_corr = 0.0
+        if t_rep_samples:
+            t_diffs = [abs(s.get("expected_reps", 0) - s.get("ai_rep_count", 0)) for s in t_rep_samples]
+            t_avg_corr = round(sum(t_diffs) / len(t_diffs), 1)
+        per_test[test_type_doc] = {
+            "correct": t_correct,
+            "foul": t_foul,
+            "total": t_correct + t_foul,
+            "with_reps": t_reps,
+            "avg_rep_correction": t_avg_corr,
+        }
+
     return {
         'total_training_samples': total,
         'correct_samples': correct,
         'foul_samples': foul,
         'samples_with_expected_reps': with_reps,
+        'avg_rep_correction': avg_rep_correction,
         'min_samples_per_class': MIN_SAMPLES_PER_CLASS,
         'trained_models': models,
+        'per_test': per_test,
         'can_train_form': correct >= MIN_SAMPLES_PER_CLASS and foul >= MIN_SAMPLES_PER_CLASS,
         'can_train_reps': with_reps >= 3,
     }

@@ -440,24 +440,24 @@ def _get_joint_config(test_type: str) -> dict:
             "left_joints": ["LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST"],
             "right_joints": ["RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST"],
             "direction": "down_up",
-            "down_threshold": 100,
-            "up_threshold": 150,
+            "down_threshold": 120,
+            "up_threshold": 140,
         }
     elif "sit" in test_lower:
         return {
             "left_joints": ["LEFT_SHOULDER", "LEFT_HIP", "LEFT_KNEE"],
             "right_joints": ["RIGHT_SHOULDER", "RIGHT_HIP", "RIGHT_KNEE"],
             "direction": "down_up",
-            "down_threshold": 70,
-            "up_threshold": 140,
+            "down_threshold": 90,
+            "up_threshold": 130,
         }
     elif "pull" in test_lower:
         return {
             "left_joints": ["LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST"],
             "right_joints": ["RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST"],
             "direction": "down_up",
-            "down_threshold": 80,   # Arms bent at top of pull-up
-            "up_threshold": 150,    # Arms extended at bottom
+            "down_threshold": 100,   # Arms bent at top of pull-up (loose)
+            "up_threshold": 145,    # Arms extended at bottom (loose)
         }
     else:
         # Default: elbow angle

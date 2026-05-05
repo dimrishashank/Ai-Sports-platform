@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { testsApi } from '@/lib/api';
+import { testsApi, demoVideosApi } from '@/lib/api';
 import { VideoRecorder } from '@/components/video/VideoRecorder';
 import { VideoUploader } from '@/components/video/VideoUploader';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { 
   ArrowLeft, Clock, Ruler, ChevronRight, Target, 
   Dumbbell, Activity, Wind, Timer, Footprints, CheckCircle, 
-  Video, Upload, Lock
+  Video, Upload, Lock, Play
 } from 'lucide-react';
 
 interface TestType {
@@ -28,6 +28,8 @@ const TEST_AESTHETICS: Record<string, { icon: React.ElementType, ring: string }>
 };
 
 const DEFAULT_AESTHETIC = { icon: Target, ring: 'border-blue-600 text-blue-600' };
+
+
 
 const TEST_INSTRUCTIONS: Record<string, string[]> = {
   'Pushups': [
@@ -56,12 +58,25 @@ export default function RecordTestPage() {
   const [mode, setMode] = useState<'select' | 'instructions' | 'record' | 'upload'>('select');
   const [testTypes, setTestTypes] = useState<TestType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [demoLoading, setDemoLoading] = useState(true);
+  const [demoUrls, setDemoUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     testsApi.getTypes()
       .then(data => setTestTypes(data.types))
       .catch(err => console.error('Failed to load test types:', err))
       .finally(() => setLoading(false));
+
+    // Fetch demo video URLs
+    demoVideosApi.getAll()
+      .then(data => {
+        const urls: Record<string, string> = {};
+        for (const [testType, info] of Object.entries(data.demos)) {
+          urls[testType] = info.url;
+        }
+        setDemoUrls(urls);
+      })
+      .catch(() => {});
   }, []);
 
   // Separate active and coming soon tests
@@ -81,7 +96,7 @@ export default function RecordTestPage() {
       <DashboardLayout>
         <div className="max-w-screen-md mx-auto px-6 py-8">
           <button
-            onClick={() => { setSel(null); setMode('select'); }}
+            onClick={() => { setSel(null); setMode('select'); setDemoLoading(true); }}
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 mb-6"
           >
             <ArrowLeft className="w-4 h-4" /> Back to Tests
@@ -101,6 +116,39 @@ export default function RecordTestPage() {
           {/* Instructions View */}
           {mode === 'instructions' && (
             <div className="bg-white border border-gray-200 rounded-xl p-8 shadow-sm">
+              {/* Demo Video Player */}
+              {demoUrls[sel.name.toLowerCase()] && (
+                <div className="mb-8">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Play className="w-5 h-5 text-indigo-600" />
+                    <h2 className="text-lg font-bold text-gray-900">Watch Demo</h2>
+                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-wider">Reference</span>
+                  </div>
+                  <div className="relative rounded-2xl overflow-hidden bg-black aspect-video border border-gray-200 shadow-md">
+                    {demoLoading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                          <p className="text-sm font-medium text-gray-500">Loading demo video...</p>
+                        </div>
+                      </div>
+                    )}
+                    <video
+                      src={demoUrls[sel.name.toLowerCase()]}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      controls
+                      onLoadedData={() => setDemoLoading(false)}
+                      onError={() => setDemoLoading(false)}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2 text-center">This video demonstrates the correct form. Watch before recording.</p>
+                </div>
+              )}
+
               <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
                 <Target className="w-5 h-5 text-blue-600" />
                 Proper Form & Setup

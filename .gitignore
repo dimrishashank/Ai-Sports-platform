@@ -63,3 +63,21 @@ venv.bak/
 server/token.json
 server/oauth_credentials.json
 server/ai-sports-storage-*.json
+
+# ML trained models (generated, not source)
+server/ai_training/models/
+
+# Temporary scripts
+fix_synthetic.py
+server/analyze_pullup_data.py
+server/find_recent_video.py
+
+# Report helper scripts & temp files
+Report/convert_to_docx.py
+Report/convert_with_diagrams.py
+Report/convert_ml_explanation.py
+Report/add_diagrams.py
+Report/add_ml_chapter.py
+Report/add_ml_explanation.py
+Report/fix_synthetic.py
+Report/*.png

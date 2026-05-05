@@ -39,7 +39,7 @@ export function Navbar() {
   const roleLabel = user?.role === 'headadmin' ? 'Head Admin' : user?.role === 'admin' ? 'Sub-Admin' : user?.role;
 
   return (
-    <nav className="fixed top-0 inset-x-0 z-[100] h-16 border-b border-white/10 bg-white/70 backdrop-blur-md shadow-sm transition-all duration-300">
+    <nav className="fixed top-0 inset-x-0 z-[100] h-[72px] border-b border-slate-200/50 bg-white/70 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.03)] transition-all duration-300">
       <div className="max-w-[1400px] mx-auto px-6 h-full flex items-center justify-between">
         <div className="flex items-center gap-4">
           {authed && (

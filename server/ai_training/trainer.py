@@ -51,6 +51,8 @@ JOINT_CONFIGS = {
         "body_line_left": ["LEFT_SHOULDER", "LEFT_HIP", "LEFT_ANKLE"],
         "body_line_right": ["RIGHT_SHOULDER", "RIGHT_HIP", "RIGHT_ANKLE"],
         "hip_sag": ["LEFT_SHOULDER", "LEFT_HIP", "LEFT_KNEE"],  # detects hip sagging
+        "down_threshold": 120,
+        "up_threshold": 140,
     },
     "sit-ups": {
         "primary_left": ["LEFT_SHOULDER", "LEFT_HIP", "LEFT_KNEE"],
@@ -60,6 +62,8 @@ JOINT_CONFIGS = {
         "body_line_left": ["LEFT_SHOULDER", "LEFT_HIP", "LEFT_KNEE"],
         "body_line_right": ["RIGHT_SHOULDER", "RIGHT_HIP", "RIGHT_KNEE"],
         "hip_sag": ["LEFT_SHOULDER", "LEFT_HIP", "LEFT_KNEE"],
+        "down_threshold": 90,
+        "up_threshold": 130,
     },
     "pull-ups": {
         "primary_left": ["LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST"],
@@ -69,6 +73,8 @@ JOINT_CONFIGS = {
         "body_line_left": ["LEFT_SHOULDER", "LEFT_HIP", "LEFT_KNEE"],
         "body_line_right": ["RIGHT_SHOULDER", "RIGHT_HIP", "RIGHT_KNEE"],
         "hip_sag": ["LEFT_SHOULDER", "LEFT_HIP", "LEFT_KNEE"],
+        "down_threshold": 100,
+        "up_threshold": 145,
     },
 }
 
@@ -290,7 +296,9 @@ def extract_exercise_pattern(video_path: str, test_type: str) -> dict:
         angular_acceleration = np.array([0])
 
     # Rep counting with per-rep quality metrics
-    rep_count, rep_metrics, rep_durations = _count_reps_enhanced(angles, timestamps)
+    rep_count, rep_metrics, rep_durations = _count_reps_enhanced(
+        angles, timestamps, config.get("down_threshold", 100), config.get("up_threshold", 150)
+    )
 
     # Body stability: std dev of shoulder position (lower = more stable)
     shoulder_stability = float(np.std(shoulder_y_positions)) if shoulder_y_positions else 0
@@ -374,7 +382,7 @@ def extract_exercise_pattern(video_path: str, test_type: str) -> dict:
     return pattern
 
 
-def _count_reps_enhanced(angles, timestamps):
+def _count_reps_enhanced(angles, timestamps, down_thresh, up_thresh):
     """Count reps with per-rep quality metrics.
     
     Rep rule: wait for first stable UP position, then
@@ -393,10 +401,6 @@ def _count_reps_enhanced(angles, timestamps):
         smoothed = np.convolve(angles, kernel, mode='same')
     else:
         smoothed = np.array(angles, dtype=float)
-
-    median_angle = np.median(smoothed)
-    up_thresh = median_angle + 10
-    down_thresh = median_angle - 10
 
     # Wait for first stable "up" before counting
     phase = None

@@ -15,8 +15,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
     
-    /* Premium Indigo/Blue mix */
-    --primary: 239 84% 67%; /* #6366f1 (Indigo 500) */
+    /* Premium Indigo/Violet mix */
+    --primary: 243 75% 59%; /* #4f46e5 (Indigo 600) */
     --primary-foreground: 210 40% 98%;
     
     --secondary: 214 32% 91%;
@@ -38,13 +38,13 @@
     /* Borders and inputs - softer */
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 239 84% 67%;
+    --ring: 243 75% 59%;
     
-    --radius: 0.75rem; /* Smoother default rounding */
+    --radius: 1rem; /* Smoother, larger default rounding for premium feel */
 
-    /* Premium Shadows */
-    --shadow-premium: 0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 0 3px rgba(15, 23, 42, 0.02);
-    --shadow-premium-hover: 0 10px 40px -4px rgba(15, 23, 42, 0.08), 0 0 4px rgba(15, 23, 42, 0.03);
+    /* Premium Shadows - Stripe/Apple style */
+    --shadow-premium: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.02);
+    --shadow-premium-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.02);
   }
 }
 

@@ -14,7 +14,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
 # Only request access to files created by this app + general Drive access for the folder
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
+SCOPES = ['https://www.googleapis.com/auth/drive']
 
 TOKEN_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'token.json')
 CREDENTIALS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'oauth_credentials.json')
@@ -33,11 +33,16 @@ def main():
             return
         elif creds and creds.expired and creds.refresh_token:
             print("🔄 Token expired, refreshing...")
-            creds.refresh(Request())
-            with open(TOKEN_PATH, 'w') as f:
-                f.write(creds.to_json())
-            print("✅ Token refreshed successfully!")
-            return
+            try:
+                creds.refresh(Request())
+                with open(TOKEN_PATH, 'w') as f:
+                    f.write(creds.to_json())
+                print("✅ Token refreshed successfully!")
+                return
+            except Exception as e:
+                print(f"⚠️  Refresh failed: {e}")
+                print("   Deleting stale token and starting fresh login...\n")
+                os.remove(TOKEN_PATH)
 
     # Check for OAuth credentials file
     if not os.path.exists(CREDENTIALS_PATH):
