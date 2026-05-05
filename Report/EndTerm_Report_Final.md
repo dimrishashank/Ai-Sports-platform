@@ -13,15 +13,13 @@
 
 | Specialization | SAP ID | Name |
 |---|---|---|
-| B.Tech CSE (AI & ML) | 500109837 | Shashank Dimri |
-| B.Tech CSE (AI & ML) | | |
+| B.Tech CSE (AI & ML) | 5001243977 | Shashank Dimri |
 
 **AI Cluster**
 **School of Computer Science**
 **UNIVERSITY OF PETROLEUM & ENERGY STUDIES,**
 **DEHRADUN — 248007. Uttarakhand**
 
-**Project Mentor: Ms. Swati Rastogi**
 
 ---
 
