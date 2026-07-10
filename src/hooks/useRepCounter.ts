@@ -24,21 +24,38 @@ export function useRepCounter({ testType }: UseRepCounterOptions) {
   const processLandmarks = useCallback((landmarks: Point[]) => {
     if (!landmarks || landmarks.length < 29) return;
 
-    const [jA, jB, jC] = config.joints;
-    const a = landmarks[jA];
-    const b = landmarks[jB];
-    const c = landmarks[jC];
+    const getAngle = (joints: readonly number[]) => {
+      const [jA, jB, jC] = joints;
+      const a = landmarks[jA];
+      const b = landmarks[jB];
+      const c = landmarks[jC];
+      if (!a || !b || !c) return { angle: 0, vis: 0 };
+      const vis = Math.min(a.visibility ?? 1, b.visibility ?? 1, c.visibility ?? 1);
+      if (vis < 0.3) return { angle: 0, vis: 0 };
+      return { angle: calculateAngle(a, b, c), vis };
+    };
 
-    if (!a || !b || !c) return;
+    const left = getAngle((config as any).leftJoints || config.joints);
+    const right = getAngle((config as any).rightJoints || config.joints);
 
-    // Check visibility
-    const minVis = Math.min(a.visibility ?? 1, b.visibility ?? 1, c.visibility ?? 1);
-    if (minVis < 0.4) {
+    let finalAngle = 0;
+    let minVis = 0;
+
+    if (left.vis > 0.3 && right.vis > 0.3) {
+      finalAngle = (left.angle + right.angle) / 2;
+      minVis = Math.min(left.vis, right.vis);
+    } else if (left.vis > 0.3) {
+      finalAngle = left.angle;
+      minVis = left.vis;
+    } else if (right.vis > 0.3) {
+      finalAngle = right.angle;
+      minVis = right.vis;
+    } else {
       setFormQuality('poor');
       return;
     }
 
-    const angle = calculateAngle(a, b, c);
+    const angle = finalAngle;
     setCurrentAngle(Math.round(angle));
 
     // Form quality based on visibility

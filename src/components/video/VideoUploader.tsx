@@ -61,22 +61,6 @@ export function VideoUploader({ testType, onComplete }: VideoUploaderProps) {
       return;
     }
 
-    // Check video duration (minimum 60 seconds)
-    try {
-      const duration = await getVideoDuration(file);
-      if (duration < 60) {
-        toast({
-          title: 'Video too short',
-          description: `Video must be at least 1 minute long. Your video is ${Math.round(duration)} seconds.`,
-          variant: 'destructive',
-        });
-        return;
-      }
-    } catch {
-      // If we can't check duration, let the backend handle it
-      console.warn('Could not check video duration client-side');
-    }
-
     setPhase('uploading');
     setProgress(0);
     setError('');
@@ -111,20 +95,6 @@ export function VideoUploader({ testType, onComplete }: VideoUploaderProps) {
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  /** Get video duration in seconds using HTMLVideoElement */
-  const getVideoDuration = (videoFile: File): Promise<number> => {
-    return new Promise((resolve, reject) => {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      video.onloadedmetadata = () => {
-        URL.revokeObjectURL(video.src);
-        resolve(video.duration);
-      };
-      video.onerror = () => reject(new Error('Cannot read video'));
-      video.src = URL.createObjectURL(videoFile);
-    });
   };
 
   return (
@@ -198,7 +168,10 @@ export function VideoUploader({ testType, onComplete }: VideoUploaderProps) {
         <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
           <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto mb-4" />
           <p className="text-lg font-bold text-gray-900 mb-2">Uploading Video...</p>
-          <p className="text-sm text-gray-500 mb-4">{progress}% complete</p>
+          <p className="text-sm text-gray-500 mb-4">
+            {progress}% complete
+            {file && ` (${(file.size * progress / 100 / 1024 / 1024).toFixed(1)} MB / ${(file.size / 1024 / 1024).toFixed(1)} MB)`}
+          </p>
           <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
             <div
               style={{ width: `${progress}%` }}
@@ -280,7 +253,6 @@ export function VideoUploader({ testType, onComplete }: VideoUploaderProps) {
         <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-5">
           <p className="text-sm font-bold text-gray-900 mb-3">📋 Upload Guidelines</p>
           <ul className="text-sm text-gray-600 space-y-2 list-disc list-inside">
-            <li className="font-medium"><strong>Video must be at least 1 minute long</strong></li>
             <li>Record yourself doing {testType.toLowerCase()} from a side angle</li>
             <li>Keep your full body visible in the frame</li>
             <li>AI will automatically count your reps from the video</li>

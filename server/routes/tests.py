@@ -184,54 +184,33 @@ def upload_test_video():
     if not video_file:
         return jsonify({"error": "Video file is required"}), 400
 
-    # Video duration validation — minimum 60 seconds for uploads
-    import cv2
-    tmp_path = None
-    try:
-        ext = video_file.filename.rsplit(".", 1)[-1] if "." in video_file.filename else "mp4"
-        tmp_path = os.path.join(tempfile.gettempdir(), f"dur_check_{uuid.uuid4().hex[:8]}.{ext}")
-        video_file.save(tmp_path)
-        cap = cv2.VideoCapture(tmp_path)
-        if cap.isOpened():
-            fps = cap.get(cv2.CAP_PROP_FPS) or 30
-            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-            duration_secs = frame_count / fps if fps > 0 else 0
-            cap.release()
-            if duration_secs < 60:
-                return jsonify({
-                    "error": f"Video must be at least 1 minute long. Your video is {duration_secs:.0f} seconds.",
-                    "duration": round(duration_secs),
-                    "min_duration": 60
-                }), 400
-        else:
-            cap.release()
-        # Reset file stream from saved file
-        video_file.stream.seek(0)
-    except Exception as e:
-        print(f"⚠️ Duration check failed (proceeding anyway): {e}")
-        video_file.stream.seek(0)
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                os.unlink(tmp_path)
-            except:
-                pass
-
     # Get athlete age for benchmark
     user = db.users.find_one({"_id": ObjectId(user_id)})
     athlete_age = user.get("age") if user else None
 
-    # Step 1: Upload video to Google Drive
+    import tempfile
+    import os
     ext = video_file.filename.rsplit(".", 1)[-1] if "." in video_file.filename else "mp4"
-    object_name = f"videos/{user_id}/{test_type.lower().replace(' ', '_')}_{uuid.uuid4().hex[:8]}.{ext}"
-    video_id = upload_video(video_file.stream, object_name, video_file.content_type or "video/mp4")
+    with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as f:
+        video_file.stream.seek(0)
+        f.write(video_file.stream.read())
+        tmp_path = f.name
 
-    if not video_id:
-        return jsonify({"error": "Video upload failed. Please try again."}), 500
+    try:
+        # Step 1: Upload video to Google Drive
+        object_name = f"videos/{user_id}/{test_type.lower().replace(' ', '_')}_{uuid.uuid4().hex[:8]}.{ext}"
+        with open(tmp_path, "rb") as f_read:
+            video_id = upload_video(f_read, object_name, video_file.content_type or "video/mp4")
 
-    # Step 2: Run AI analysis on the video
-    video_file.stream.seek(0)  # Reset stream position
-    ai_result = analyze_video_from_stream(video_file.stream, test_type)
+        if not video_id:
+            return jsonify({"error": "Video upload failed. Please try again."}), 500
+
+        # Step 2: Run AI analysis on the video
+        with open(tmp_path, "rb") as f_read:
+            ai_result = analyze_video_from_stream(f_read, test_type)
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
     # Step 3: Determine score — AI counts reps for all test types
     verified_reps = ai_result.get("verified_reps", 0)
